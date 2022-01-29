@@ -1,0 +1,39 @@
+*.class
+*.log
+
+# sbt specific
+.cache
+.cache-main
+.cache-tests
+.history
+.lib/
+dist/*
+target/
+lib_managed/
+src_managed/
+project/boot/
+project/plugins/project/
+
+.idea/
+.vscode/
+
+# Eclipse specific
+.project
+.classpath
+.prefs
+.settings
+
+# Scala-IDE specific
+.scala_dependencies
+.worksheet
+
+# ENSIME specific
+.ensime_cache/
+.ensime
+
+# Metals & Bloop
+.bsp/
+.bloop/
+.metals/
+.ammonite/
+metals.sbt
