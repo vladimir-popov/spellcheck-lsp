@@ -1,37 +1,49 @@
 package ru.dokwork.spellchecklsp
 
 import java.net.URI
-import java.util.{ List => JList }
-import org.eclipse.lsp4j.jsonrpc.messages.{ Either => JEither }
-import java.util.concurrent.CompletableFuture
+import java.nio.file.{ Files, Paths }
+import java.util.concurrent.{ CompletableFuture, ConcurrentHashMap }
+import java.util.stream.{ Collectors, Stream }
+import java.util.{ Optional, _ }
 
 import org.eclipse.lsp4j.*
-import org.eclipse.lsp4j.services.TextDocumentService
+import org.eclipse.lsp4j.jsonrpc.CompletableFutures
+import org.eclipse.lsp4j.jsonrpc.messages.Either
+import org.eclipse.lsp4j.services.{ LanguageClient, TextDocumentService }
+
+import com.google.common.collect.{ Lists, Streams }
 import org.languagetool.JLanguageTool
 import org.languagetool.language.BritishEnglish
-import org.languagetool.rules.RuleMatch
-import org.languagetool.rules.RuleMatch.Type
-
-import scala.io.Source
-import scala.jdk.CollectionConverters.*
-import org.eclipse.lsp4j.services.LanguageClient
-import java.util.concurrent.ConcurrentHashMap
+import org.slf4j.LoggerFactory
 
 class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumentService:
-  private val langTool = new JLanguageTool(new BritishEnglish())
-  private val documents = new ConcurrentHashMap[TextDocumentIdentifier, List[Diagnostic]]()
+  private val logger = LoggerFactory.getLogger(getClass)
 
-  /** The Completion request is sent from the client to the server to compute completion items at a
-    * given cursor position. Completion items are presented in the IntelliSense user interface. If
-    * computing complete completion items is expensive servers can additional provide a handler for
-    * the resolve completion item request. This request is sent when a completion item is selected
-    * in the user interface.
+  private type Uri         = String
+  private type Suggestions = Map[Range, LineRuleMatch]
+
+  private val documents = ConcurrentHashMap[Uri, Suggestions]()
+  private val langTool  = JLanguageTool(new BritishEnglish())
+
+  /** The code action request is sent from the client to the server to compute commands for a given
+    * text document and range. These commands are typically code fixes to either fix problems or to
+    * beautify/refactor code.
     *
-    * Registration Options: CompletionRegistrationOptions
+    * Registration Options: TextDocumentRegistrationOptions
     */
-  override def completion(
-      position: CompletionParams
-  ): CompletableFuture[JEither[JList[CompletionItem], CompletionList]] = ???
+  override def codeAction(
+      params: CodeActionParams
+  ): CompletableFuture[List[Either[Command, CodeAction]]] =
+    CompletableFutures.computeAsync { _ =>
+      val suggestions: Suggestions =
+        documents.getOrDefault(params.getTextDocument.getUri, Collections.emptyMap)
+
+      val actions = suggestions.findValues(_.contains(params.getRange)).flatMap {
+        _.asTextChanges.map(_.asAction(params.getTextDocument.getUri))
+      }
+
+      actions.map(Either.forRight[Command, CodeAction]).toList
+    }
 
   /** The document open notification is sent from the client to the server to signal newly opened
     * text documents. The document's truth is now managed by the client and the server must not try
@@ -56,7 +68,8 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
     *
     * Registration Options: TextDocumentRegistrationOptions
     */
-  override def didClose(params: DidCloseTextDocumentParams): Unit = ()
+  override def didClose(params: DidCloseTextDocumentParams): Unit =
+    documents.remove(params.getTextDocument.getUri)
 
   /** The document save notification is sent from the client to the server when the document for
     * saved in the client.
@@ -65,24 +78,21 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
     */
   override def didSave(params: DidSaveTextDocumentParams): Unit = ()
 
-  private def checkDocument(uri: String): Unit =
-    val diagnostics: List[Diagnostic] = Source
-      .fromFile(new URI(uri))
-      .getLines
+  private def checkDocument(uri: Uri): Unit =
+    val suggestions: Suggestions = Files
+      .lines(Paths.get(URI(uri)))
       .zipWithIndex
       .flatMap { case (line, lineNumber) =>
-        langTool.check(line).asScala.map(diagnostic(lineNumber))
+        langTool
+          .check(line)
+          .stream
+          .map(LineRuleMatch(_, lineNumber))
+          .map(rule => rule.getRange -> rule)
       }
-      .toList
-    client().publishDiagnostics(new PublishDiagnosticsParams(uri, diagnostics.asJava))
+      .toMap
 
-  private def diagnostic(lineNumber: Int)(rule: RuleMatch): Diagnostic =
-    val start    = Position(lineNumber, rule.getFromPos)
-    val end      = Position(lineNumber, rule.getToPos)
-    val range    = new Range(start, end)
-    val severity = rule.getType match
-      case Type.UnknownWord => DiagnosticSeverity.Warning
-      case Type.Hint        => DiagnosticSeverity.Hint
-      case _                => DiagnosticSeverity.Information
+    documents.put(uri, suggestions)
 
-    new Diagnostic(range, rule.getMessage, severity, "spellchecklsp")
+    client().publishDiagnostics(
+      PublishDiagnosticsParams(uri, suggestions.values.stream.map(_.asDiagnostic).toList)
+    )

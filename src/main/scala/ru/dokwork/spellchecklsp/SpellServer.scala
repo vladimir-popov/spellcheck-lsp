@@ -49,12 +49,10 @@ class SpellServer extends LanguageServer with LanguageClientAware:
     * window/showMessageRequest request to the client.
     */
   override def initialize(params: InitializeParams): CompletableFuture[InitializeResult] =
-    val completionOptions = new CompletionOptions()
-
     val capabilities = new ServerCapabilities()
     // server synchronizes entire document
     capabilities.setTextDocumentSync(TextDocumentSyncKind.Full)
-    capabilities.setCompletionProvider(completionOptions)
+    capabilities.setCodeActionProvider(true)
     CompletableFuture.supplyAsync(() => new InitializeResult(capabilities))
 
   /** Provides access to the textDocument services. */
