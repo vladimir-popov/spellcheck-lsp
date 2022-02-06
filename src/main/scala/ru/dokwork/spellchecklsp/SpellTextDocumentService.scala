@@ -6,6 +6,8 @@ import java.util.concurrent.{ CompletableFuture, ConcurrentHashMap }
 import java.util.stream.{ Collectors, Stream }
 import java.util.{ Optional, _ }
 
+import scala.jdk.CollectionConverters.*
+
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.CompletableFutures
 import org.eclipse.lsp4j.jsonrpc.messages.Either
@@ -13,7 +15,7 @@ import org.eclipse.lsp4j.services.{ LanguageClient, TextDocumentService }
 
 import com.google.common.collect.{ Lists, Streams }
 import org.languagetool.JLanguageTool
-import org.languagetool.language.BritishEnglish
+import org.languagetool.language.{AmericanEnglish, BritishEnglish}
 import org.slf4j.LoggerFactory
 
 class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumentService:
@@ -23,7 +25,9 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
   private type Suggestions = Map[Range, LineRuleMatch]
 
   private val documents = ConcurrentHashMap[Uri, Suggestions]()
-  private val langTool  = JLanguageTool(new BritishEnglish())
+  private object langs:
+    val en = AmericanEnglish()
+
 
   /** The code action request is sent from the client to the server to compute commands for a given
     * text document and range. These commands are typically code fixes to either fix problems or to
@@ -59,8 +63,7 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
     *
     * Registration Options: TextDocumentChangeRegistrationOptions
     */
-  override def didChange(params: DidChangeTextDocumentParams): Unit =
-    checkDocument(params.getTextDocument().getUri)
+  override def didChange(params: DidChangeTextDocumentParams): Unit = ()
 
   /** The document close notification is sent from the client to the server when the document got
     * closed in the client. The document's truth now exists where the document's uri points to (e.g.
@@ -76,9 +79,11 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
     *
     * Registration Options: TextDocumentSaveRegistrationOptions
     */
-  override def didSave(params: DidSaveTextDocumentParams): Unit = ()
+  override def didSave(params: DidSaveTextDocumentParams): Unit = 
+    checkDocument(params.getTextDocument().getUri)
 
   private def checkDocument(uri: Uri): Unit =
+    val langTool  = JLanguageTool(langs.en)
     val suggestions: Suggestions = Files
       .lines(Paths.get(URI(uri)))
       .zipWithIndex
