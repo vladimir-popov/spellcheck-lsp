@@ -1,30 +1,54 @@
 package ru.dokwork.spellchecklsp
 
-import java.util.*
-import java.util.stream.{ Collector, Collectors, Stream, StreamSupport }
+import java.util.{ HashMap, List => JList, Map => JMap }
+import java.util.stream.{ Collector, Collectors, Stream => JStream, StreamSupport }
 
 import org.eclipse.lsp4j.*
 
 import com.google.common.collect.Streams
 import org.languagetool.rules.RuleMatch
+import java.util.Optional
+import scala.jdk.CollectionConverters.*
+import scala.collection.mutable.ListBuffer
+import java.util.stream.Collector.Characteristics
+import java.util.Arrays
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.immutable.ArraySeq
+import scala.reflect.ClassTag
 
+/** Extends the [[scala.collection.Iterable]]
+  */
+extension [T <: Object](itr: scala.collection.Iterable[T])
+  def stream: JStream[T] = Streams.stream(itr.asJava)
+
+/** Extends the [[scala.collection.Map]]
+ */
 extension [K, V](m: Map[K, V])
-  def stream(key: K): Stream[V] =
+  def stream: JStream[(K, V)] =
+    Streams.stream(m.iterator.asJava)
+
+/** Extends the [[java.util.Map]]
+ */
+extension [K, V](m: JMap[K, V])
+  def stream(key: K): JStream[V] =
     Optional.ofNullable(m.get(key)).stream
 
-  def findValues(f: K => Boolean): Stream[V] =
-    m.keySet.stream.filter(f(_)).flatMap(m.stream)
-
-extension [T](s: Stream[T])
-  def toList = s.collect(Collectors.toList)
-
-  def zipWithIndex: Stream[(T, Int)] =
+/** Extends the [[java.util.stream.Stream]]
+ */
+extension [T](s: JStream[T])
+  def zipWithIndex: JStream[(T, Int)] =
     Streams.mapWithIndex(s, (t, i) => t -> i.toInt)
 
-extension [K, V](s: Stream[(K, V)])
-  def toMap: Map[K, V] =
-    s.collect(() => HashMap[K, V](), (m, t) => m.put(t._1, t._2), (m, m1) => m.putAll(m1))
+  def toJList: JList[T] = s.collect(Collectors.toList)
 
+  def toJMap[K, V](using ev: T <:< (K, V)): JMap[K, V] =
+    s.collect(() => HashMap[K, V](), (m, t) => m.put.tupled(ev(t)), (m, m1) => m.putAll(m1))
+
+  def toIndexedSeq: IndexedSeq[T] =
+    s.toJList.asScala.toIndexedSeq
+
+/** Extends the [[org.eclipse.lsp4j.Position]]
+ */
 extension (pos: Position)
   def <=(other: Position): Boolean =
     pos.getLine <= other.getLine && pos.getCharacter <= other.getCharacter
@@ -32,17 +56,22 @@ extension (pos: Position)
   def >=(other: Position): Boolean =
     pos.getLine >= other.getLine && pos.getCharacter >= other.getCharacter
 
+/** Extends the [[org.eclipse.lsp4j.Range]]
+ */
 extension (range: Range)
   def contains(pos: Position): Boolean =
     range.getStart <= pos && pos <= range.getEnd
 
-  def contains(other: Range): Boolean =
+  def includes(other: Range): Boolean =
     range.contains(other.getStart) && range.contains(other.getEnd)
 
+  def intersectsWith(other: Range): Boolean = 
+    range.contains(other.getStart) || range.contains(other.getEnd)
+
+/** Extends the [[org.eclipse.lsp4j.TextEdit]]
+ */
 extension (edit: TextEdit)
-  def asAction(uri: String): CodeAction =
+  def asAction(uri: Uri): CodeAction =
     val action = CodeAction(edit.getNewText)
-    action.setEdit(
-      WorkspaceEdit(Map.of(uri, List.of(edit)))
-    )
+    action.setEdit(WorkspaceEdit(JMap.of(uri.asString, JList.of(edit))))
     action

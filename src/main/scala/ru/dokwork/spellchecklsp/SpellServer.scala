@@ -2,7 +2,7 @@ package ru.dokwork.spellchecklsp
 
 import java.util.concurrent.CompletableFuture
 
-import org.eclipse.lsp4j._
+import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.services.{
   LanguageClient,
   LanguageClientAware,
@@ -11,7 +11,9 @@ import org.eclipse.lsp4j.services.{
   WorkspaceService
 }
 
-class SpellServer extends LanguageServer with LanguageClientAware:
+import com.typesafe.scalalogging.StrictLogging
+
+class SpellServer extends LanguageServer with LanguageClientAware with StrictLogging:
 
   private var client: LanguageClient = _
   private var exitCode: Int          = 1
@@ -51,13 +53,14 @@ class SpellServer extends LanguageServer with LanguageClientAware:
   override def initialize(params: InitializeParams): CompletableFuture[InitializeResult] =
     val capabilities = new ServerCapabilities()
     // server synchronizes entire document
-    capabilities.setTextDocumentSync(TextDocumentSyncKind.Full)
+    capabilities.setTextDocumentSync(TextDocumentSyncKind.Incremental)
     capabilities.setCodeActionProvider(true)
-    CompletableFuture.supplyAsync(() => new InitializeResult(capabilities))
+    logger.debug(s"Initialize with $capabilities")
+    CompletableFuture.supplyAsync(() => InitializeResult(capabilities))
 
   /** Provides access to the textDocument services. */
   override def getTextDocumentService(): TextDocumentService =
-    new SpellTextDocumentService(() => client)
+    SpellTextDocumentService(() => client)
 
   /** Provides access to the workspace services. Stub. */
   override def getWorkspaceService(): WorkspaceService =

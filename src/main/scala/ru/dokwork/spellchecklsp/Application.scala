@@ -1,13 +1,12 @@
 package ru.dokwork.spellchecklsp
 
 import org.eclipse.lsp4j.launch.LSPLauncher
-
-import org.slf4j.{ Logger, LoggerFactory }
-
-val logger = LoggerFactory.getLogger("spellcheck-lsp")
+import com.typesafe.scalalogging.Logger
 
 @main def run(): Unit =
-  logger.info("Server has been started")
+  val logger = Logger("ru.dokwork.spellchecklsp.Application")
+
+  logger.info("\n" + ("*" * 30) + "\n* Server has been started\n" + ("*" * 30))
 
   val server   = SpellServer()
   val launcher = LSPLauncher.createServerLauncher(server, System.in, System.out)
