@@ -8,6 +8,8 @@ import java.util.{ Collections, List => JList, Map => JMap }
 
 import scala.jdk.CollectionConverters.*
 
+import scala.jdk.CollectionConverters.*
+
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.CompletableFutures
 import org.eclipse.lsp4j.jsonrpc.messages.{ Either => JEither }
