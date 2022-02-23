@@ -36,8 +36,8 @@ trait Document:
   /** Builds a stream with diagnostics for the document */
   def diagnostics: JStream[Diagnostic]
 
-  /** Returns a stream of possible code actions for the text inside the `range`. */
-  def getCodeActions(range: Range): JStream[CodeAction]
+  /** Returns a stream of possible code actions for the text under cursor `position`. */
+  def getCodeActions(position: Position, limit: Int = 10): JStream[CodeAction]
 
   /** Applies changes and retruns updated document. */
   def applyChange(change: TextDocumentContentChangeEvent): Document
@@ -61,7 +61,7 @@ case class Suggestion(range: Range, rule: RuleMatch):
       case _                => DiagnosticSeverity.Information
     Diagnostic(range, rule.getMessage, severity, "spellchecklsp")
 
-  def asTextChanges: JStream[TextEdit] =
+  def asTextEdits: JStream[TextEdit] =
     rule.getSuggestedReplacements.stream.map(TextEdit(range, _))
 
 /** Implementation of the [[Document]] for plain text */
@@ -78,8 +78,12 @@ class TxtDocument(
   def diagnostics =
     suggestions.view.values.flatten.stream.map(_.asDiagnostic)
 
-  def getCodeActions(range: Range): JStream[CodeAction] =
-    suggestions.view.values.flatten.stream.flatMap(_.asTextChanges).map(_.asAction(uri))
+  def getCodeActions(position: Position, limit: Int = 10): JStream[CodeAction] =
+    for
+      sgs  <- suggestions.stream(position.getLine)
+      sg   <- sgs.stream.filter(_.range.contains(position))
+      edit <- sg.asTextEdits.limit(limit)
+    yield edit.asAction(uri)
 
   def applyChange(change: TextDocumentContentChangeEvent) =
     val (start, end) = change.getRange.getStart -> change.getRange.getEnd
@@ -98,21 +102,6 @@ class TxtDocument(
         suggestions.takeWhile((i, _) => i < start.getLine)
       else
         merge(suggestions, check(updatedLines, language, start.getLine))
-
-    logger.trace(
-      s"""New change:
-          |--------------
-          |$change
-          |--------------
-          |Updated lines:
-          |--------------
-          |${updatedLines.mkString("\n")}
-          |--------------
-          |Actual suggestions:
-          |--------------
-          |${newSuggestions.mkString("\n")}
-          |--------------""".stripMargin
-    )
 
     TxtDocument(uri, language, newLines, newSuggestions)
 

@@ -1,14 +1,17 @@
 package ru.dokwork.spellchecklsp
 
+import java.util.{ List => JList, Map => JMap }
+import scala.collection.immutable.ArraySeq
+import scala.jdk.CollectionConverters.*
+
+import org.eclipse.lsp4j.{ CodeAction, Position, Range, TextDocumentContentChangeEvent, TextEdit }
+
+import org.languagetool.language.AmericanEnglish
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
-import org.eclipse.lsp4j.Range
-import org.eclipse.lsp4j.TextDocumentContentChangeEvent
-import org.eclipse.lsp4j.Position
-import org.languagetool.language.AmericanEnglish
-import scala.collection.immutable.ArraySeq
+import org.scalatest.Inspectors
 
-class TxtDocumentSpec extends AnyFreeSpec with Matchers with TestCases:
+class TxtDocumentSpec extends AnyFreeSpec with Matchers with Inspectors with TestCases:
 
   "Splitting lines" - {
     "should return empty seq" in {
@@ -135,6 +138,31 @@ class TxtDocumentSpec extends AnyFreeSpec with Matchers with TestCases:
       diagnostics.filter(_.getRange.getStart.getLine == 0) should have size 0
       diagnostics.filter(_.getRange.getStart.getLine == 1) should have size 2
       diagnostics.filter(_.getRange.getStart.getLine == 2) should have size 1
+    }
+  }
+
+  "Code actions" - {
+    // given:
+    val char                                   = Text.line1.indexOf(Text.Mistakes.wto)
+    val p1                                     = Position(1, char)
+    val p2                                     = Position(1, char + Text.Mistakes.wto.length)
+
+    "should return no more than 10 actions" in {
+      // when:
+      val actions = Text.doc.getCodeActions(p1)
+      // then:
+      actions.toJList.size should be <= 10
+    }
+
+    "should return code actions to fix only first mistake" in {
+      // when:
+      val actions                                = Text.doc.getCodeActions(p1).toIndexedSeq
+      // then:
+      forAll(actions) { action =>
+        val changes = action.getEdit.getChanges.get(Text.doc.uri)
+        changes should have size 1
+        changes.get(0).getRange shouldBe Range(p1, p2)
+      }
     }
   }
 

@@ -21,20 +21,30 @@ import scala.reflect.ClassTag
 extension [T <: Object](itr: scala.collection.Iterable[T])
   def stream: JStream[T] = Streams.stream(itr.asJava)
 
+/** Extends the [[scala.Option]]
+  */
+extension [T](opt: Option[T])
+  def stream: JStream[T]             = opt match
+    case None        => JStream.empty
+    case Some(value) => JStream.of(value)
+
 /** Extends the [[scala.collection.Map]]
- */
+  */
 extension [K, V](m: Map[K, V])
+  def stream(key: K): JStream[V] =
+    m.get(key).stream
+
   def stream: JStream[(K, V)] =
     Streams.stream(m.iterator.asJava)
 
 /** Extends the [[java.util.Map]]
- */
+  */
 extension [K, V](m: JMap[K, V])
-  def stream(key: K): JStream[V] =
+  def stream(key: K): JStream[V]     =
     Optional.ofNullable(m.get(key)).stream
 
 /** Extends the [[java.util.stream.Stream]]
- */
+  */
 extension [T](s: JStream[T])
   def zipWithIndex: JStream[(T, Int)] =
     Streams.mapWithIndex(s, (t, i) => t -> i.toInt)
@@ -48,7 +58,7 @@ extension [T](s: JStream[T])
     s.toJList.asScala.toIndexedSeq
 
 /** Extends the [[org.eclipse.lsp4j.Position]]
- */
+  */
 extension (pos: Position)
   def <=(other: Position): Boolean =
     pos.getLine <= other.getLine && pos.getCharacter <= other.getCharacter
@@ -57,7 +67,7 @@ extension (pos: Position)
     pos.getLine >= other.getLine && pos.getCharacter >= other.getCharacter
 
 /** Extends the [[org.eclipse.lsp4j.Range]]
- */
+  */
 extension (range: Range)
   def contains(pos: Position): Boolean =
     range.getStart <= pos && pos <= range.getEnd
@@ -65,11 +75,11 @@ extension (range: Range)
   def includes(other: Range): Boolean =
     range.contains(other.getStart) && range.contains(other.getEnd)
 
-  def intersectsWith(other: Range): Boolean = 
+  def intersectsWith(other: Range): Boolean =
     range.contains(other.getStart) || range.contains(other.getEnd)
 
 /** Extends the [[org.eclipse.lsp4j.TextEdit]]
- */
+  */
 extension (edit: TextEdit)
   def asAction(uri: Uri): CodeAction =
     val action = CodeAction(edit.getNewText)

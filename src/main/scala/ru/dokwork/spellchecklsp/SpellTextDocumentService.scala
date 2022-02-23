@@ -44,7 +44,7 @@ class SpellTextDocumentService(client: () => LanguageClient)
     CompletableFutures.computeAsync { _ =>
       val actions = for
         verDoc <- documents.stream(Uri(params.getTextDocument.getUri))
-        action <- verDoc.value.getCodeActions(params.getRange)
+        action <- verDoc.value.getCodeActions(params.getRange.getStart)
       yield JEither.forRight[Command, CodeAction](action)
       actions.toJList
     }
