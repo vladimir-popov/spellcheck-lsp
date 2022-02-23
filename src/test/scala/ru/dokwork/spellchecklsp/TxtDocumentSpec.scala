@@ -141,28 +141,24 @@ class TxtDocumentSpec extends AnyFreeSpec with Matchers with Inspectors with Tes
     }
   }
 
-  "Code actions" - {
+  "Text edits" - {
     // given:
-    val char                                   = Text.line1.indexOf(Text.Mistakes.wto)
-    val p1                                     = Position(1, char)
-    val p2                                     = Position(1, char + Text.Mistakes.wto.length)
+    val char = Text.line1.indexOf(Text.Mistakes.wto)
+    val p1   = Position(1, char)
+    val p2   = Position(1, char + Text.Mistakes.wto.length)
 
-    "should return no more than 10 actions" in {
+    "should return no more than 10 edits" in {
       // when:
-      val actions = Text.doc.getCodeActions(p1)
+      val edits = Text.doc.getTextEdits(p1)
       // then:
-      actions.toJList.size should be <= 10
+      edits.toJList.size should be <= 10
     }
 
-    "should return code actions to fix only first mistake" in {
+    "should return edits to fix only first mistake" in {
       // when:
-      val actions                                = Text.doc.getCodeActions(p1).toIndexedSeq
+      val edits = Text.doc.getTextEdits(p1).toIndexedSeq
       // then:
-      forAll(actions) { action =>
-        val changes = action.getEdit.getChanges.get(Text.doc.uri)
-        changes should have size 1
-        changes.get(0).getRange shouldBe Range(p1, p2)
-      }
+      forAll(edits)(_.getRange shouldBe Range(p1, p2))
     }
   }
 
@@ -184,7 +180,7 @@ trait TestCases:
       *   with wto mmistakes
       * }}}
       */
-    val doc = TxtDocument.create(line0 + "\n" + line1)
+    val doc: TxtDocument = TxtDocument.create(line0 + "\n" + line1)
 
     object Changes:
       val fixMistake1           = TextDocumentContentChangeEvent(

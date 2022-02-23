@@ -42,10 +42,11 @@ class SpellTextDocumentService(client: () => LanguageClient)
   ): CompletableFuture[JList[JEither[Command, CodeAction]]] =
     logger.trace(s"Code action $params")
     CompletableFutures.computeAsync { _ =>
+      val uri = Uri(params.getTextDocument.getUri)
       val actions = for
-        verDoc <- documents.stream(Uri(params.getTextDocument.getUri))
-        action <- verDoc.value.getCodeActions(params.getRange.getStart)
-      yield JEither.forRight[Command, CodeAction](action)
+        verDoc <- documents.stream(uri)
+        edit <- verDoc.value.getTextEdits(params.getRange.getStart)
+      yield JEither.forRight[Command, CodeAction](edit.asAction(uri))
       actions.toJList
     }
 
@@ -58,11 +59,12 @@ class SpellTextDocumentService(client: () => LanguageClient)
   override def didOpen(params: DidOpenTextDocumentParams): Unit =
     val textDocument = params.getTextDocument
     val document     = Document(params.getTextDocument.getLanguageId, textDocument)
+    val uri          = Uri(textDocument.getUri)
     documents.put(
-      Uri(textDocument.getUri),
+      uri,
       Versioned(textDocument.getVersion)(document)
     )
-    publishDiagnostics(document)
+    publishDiagnostics(uri, document)
 
   /** The document change notification is sent from the client to the server to signal changes to a
     * text document.
@@ -80,11 +82,12 @@ class SpellTextDocumentService(client: () => LanguageClient)
         params.getContentChanges.asScala.foldLeft(doc.value)(_ applyChange _)
       Versioned(params.getTextDocument.getVersion)(updatedDoc)
 
+    val uri    = Uri(params.getTextDocument.getUri)
     val verDoc = documents.computeIfPresent(
-      Uri(params.getTextDocument.getUri),
+      uri,
       (_, verDoc) => updateDoc(verDoc)
     )
-    publishDiagnostics(verDoc.value)
+    publishDiagnostics(uri, verDoc.value)
 
   /** The document close notification is sent from the client to the server when the document got
     * closed in the client. The document's truth now exists where the document's uri points to (e.g.
@@ -104,9 +107,9 @@ class SpellTextDocumentService(client: () => LanguageClient)
   override def didSave(params: DidSaveTextDocumentParams): Unit =
     logger.trace(s"Did save\n$params")
 
-  private def publishDiagnostics(document: Document): Unit =
+  private def publishDiagnostics(uri: Uri, document: Document): Unit =
     val diagnostics = document.diagnostics.toJList
-    logger.debug(s"${diagnostics.size} diagnostics exist for ${document.uri}")
+    logger.debug(s"${diagnostics.size} diagnostics exist for $uri")
     client().publishDiagnostics(
-      PublishDiagnosticsParams(document.uri.asString, diagnostics)
+      PublishDiagnosticsParams(uri.asString, diagnostics)
     )

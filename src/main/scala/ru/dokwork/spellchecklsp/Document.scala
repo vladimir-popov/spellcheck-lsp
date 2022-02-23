@@ -1,6 +1,5 @@
 package ru.dokwork.spellchecklsp
 
-import java.util.stream.Stream
 import java.util.stream.{ Collectors, Stream => JStream }
 import java.util.{ ArrayList, List => JList, Map => JMap }
 
@@ -27,17 +26,11 @@ extension (uri: Uri) def asString: String = uri
 /** The representasion of the document. */
 trait Document:
 
-  /** String with URI of this document */
-  def uri: Uri
-
-  /** Full text of the document */
-  def text: String
-
   /** Builds a stream with diagnostics for the document */
   def diagnostics: JStream[Diagnostic]
 
   /** Returns a stream of possible code actions for the text under cursor `position`. */
-  def getCodeActions(position: Position, limit: Int = 10): JStream[CodeAction]
+  def getTextEdits(position: Position, limit: Int = 10): JStream[TextEdit]
 
   /** Applies changes and retruns updated document. */
   def applyChange(change: TextDocumentContentChangeEvent): Document
@@ -66,7 +59,6 @@ case class Suggestion(range: Range, rule: RuleMatch):
 
 /** Implementation of the [[Document]] for plain text */
 class TxtDocument(
-    val uri: Uri,
     language: Language,
     lines: IndexedSeq[String],
     suggestions: Map[Int, IndexedSeq[Suggestion]]
@@ -78,14 +70,14 @@ class TxtDocument(
   def diagnostics =
     suggestions.view.values.flatten.stream.map(_.asDiagnostic)
 
-  def getCodeActions(position: Position, limit: Int = 10): JStream[CodeAction] =
+  def getTextEdits(position: Position, limit: Int = 10): JStream[TextEdit] =
     for
       sgs  <- suggestions.stream(position.getLine)
       sg   <- sgs.stream.filter(_.range.contains(position))
       edit <- sg.asTextEdits.limit(limit)
-    yield edit.asAction(uri)
+    yield edit
 
-  def applyChange(change: TextDocumentContentChangeEvent) =
+  def applyChange(change: TextDocumentContentChangeEvent): TxtDocument =
     val (start, end) = change.getRange.getStart -> change.getRange.getEnd
     val newLines     =
       if (start.getLine == end.getLine)
@@ -103,7 +95,7 @@ class TxtDocument(
       else
         merge(suggestions, check(updatedLines, language, start.getLine))
 
-    TxtDocument(uri, language, newLines, newSuggestions)
+    TxtDocument(language, newLines, newSuggestions)
 
   private def applyOneLineChange(
       newText: String,
@@ -156,7 +148,7 @@ object TxtDocument:
   ): TxtDocument =
     val lines       = splitLines(text)
     val suggestions = check(lines, language)
-    TxtDocument(uri, language, lines, suggestions)
+    TxtDocument(language, lines, suggestions)
 
   def check(
       lines: IndexedSeq[String],
