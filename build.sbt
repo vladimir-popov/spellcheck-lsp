@@ -21,17 +21,19 @@ lazy val compilerOptions = Seq(
 
 lazy val dependencies = new {
   val versions = new {
-    val languagetool = "5.6"
-    val lsp4j        = "0.12.0"
-    val logback      = "1.2.10"
-    val scalatest    = "3.2.10"
+    val languagetool    = "5.6"
+    val lsp4j           = "0.12.0"
+    val logback         = "1.2.10"
+    val `scala-logging` = "3.9.4"
+    val scalatest       = "3.2.10"
   }
 
-  val languagetool = ("org.languagetool" % "language-en"       % versions.languagetool)
+  val languagetool    = ("org.languagetool"           % "language-en"       % versions.languagetool)
     .exclude("com.intellij", "annotations")
-  val lsp4j        = "org.eclipse.lsp4j" % "org.eclipse.lsp4j" % versions.lsp4j
-  val logback      = "ch.qos.logback"    % "logback-classic"   % versions.logback
-  val scalatest    = "org.scalatest"    %% "scalatest"         % versions.scalatest
+  val lsp4j           = "org.eclipse.lsp4j"           % "org.eclipse.lsp4j" % versions.lsp4j
+  val logback         = "ch.qos.logback"              % "logback-classic"   % versions.logback
+  val `scala-logging` = "com.typesafe.scala-logging" %% "scala-logging"     % versions.`scala-logging`
+  val scalatest       = "org.scalatest"              %% "scalatest"         % versions.scalatest
 }
 
 lazy val `spellcheck-lsp` = (project in file("."))
@@ -41,6 +43,7 @@ lazy val `spellcheck-lsp` = (project in file("."))
       dependencies.languagetool,
       dependencies.lsp4j,
       dependencies.logback,
+      dependencies.`scala-logging`,
       dependencies.scalatest % "test"
     ),
     assembly / assemblyJarName            := s"${name.value}",

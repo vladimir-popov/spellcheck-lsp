@@ -3,31 +3,33 @@ package ru.dokwork.spellchecklsp
 import java.net.URI
 import java.nio.file.{ Files, Paths }
 import java.util.concurrent.{ CompletableFuture, ConcurrentHashMap }
-import java.util.stream.{ Collectors, Stream }
-import java.util.{ Optional, _ }
+import java.util.stream.{ Collectors, Stream => JStream }
+import java.util.{ Collections, List => JList, Map => JMap }
+
+import scala.jdk.CollectionConverters.*
 
 import scala.jdk.CollectionConverters.*
 
 import org.eclipse.lsp4j.*
 import org.eclipse.lsp4j.jsonrpc.CompletableFutures
-import org.eclipse.lsp4j.jsonrpc.messages.Either
+import org.eclipse.lsp4j.jsonrpc.messages.{ Either => JEither }
 import org.eclipse.lsp4j.services.{ LanguageClient, TextDocumentService }
 
 import com.google.common.collect.{ Lists, Streams }
+import com.typesafe.scalalogging.StrictLogging
 import org.languagetool.JLanguageTool
-import org.languagetool.language.{AmericanEnglish, BritishEnglish}
-import org.slf4j.LoggerFactory
+import org.languagetool.language.{ AmericanEnglish, BritishEnglish }
+import org.languagetool.rules.RuleMatch
 
-class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumentService:
-  private val logger = LoggerFactory.getLogger(getClass)
+class SpellTextDocumentService(client: () => LanguageClient)
+    extends TextDocumentService
+    with StrictLogging:
+  self =>
 
-  private type Uri         = String
-  private type Suggestions = Map[Range, LineRuleMatch]
+  // two different T are equal when have the same version
+  private case class Versioned[T](version: Int)(val value: T)
 
-  private val documents = ConcurrentHashMap[Uri, Suggestions]()
-  private object langs:
-    val en = AmericanEnglish()
-
+  private val documents = ConcurrentHashMap[Uri, Versioned[Document]]()
 
   /** The code action request is sent from the client to the server to compute commands for a given
     * text document and range. These commands are typically code fixes to either fix problems or to
@@ -37,16 +39,14 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
     */
   override def codeAction(
       params: CodeActionParams
-  ): CompletableFuture[List[Either[Command, CodeAction]]] =
+  ): CompletableFuture[JList[JEither[Command, CodeAction]]] =
+    logger.trace(s"Code action $params")
     CompletableFutures.computeAsync { _ =>
-      val suggestions: Suggestions =
-        documents.getOrDefault(params.getTextDocument.getUri, Collections.emptyMap)
-
-      val actions = suggestions.findValues(_.contains(params.getRange)).flatMap {
-        _.asTextChanges.map(_.asAction(params.getTextDocument.getUri))
-      }
-
-      actions.map(Either.forRight[Command, CodeAction]).toList
+      val actions = for
+        verDoc <- documents.stream(Uri(params.getTextDocument.getUri))
+        action <- verDoc.value.getCodeActions(params.getRange.getStart)
+      yield JEither.forRight[Command, CodeAction](action)
+      actions.toJList
     }
 
   /** The document open notification is sent from the client to the server to signal newly opened
@@ -56,14 +56,35 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
     * Registration Options: TextDocumentRegistrationOptions
     */
   override def didOpen(params: DidOpenTextDocumentParams): Unit =
-    checkDocument(params.getTextDocument().getUri)
+    val textDocument = params.getTextDocument
+    val document     = Document(params.getTextDocument.getLanguageId, textDocument)
+    documents.put(
+      Uri(textDocument.getUri),
+      Versioned(textDocument.getVersion)(document)
+    )
+    publishDiagnostics(document)
 
   /** The document change notification is sent from the client to the server to signal changes to a
     * text document.
     *
     * Registration Options: TextDocumentChangeRegistrationOptions
     */
-  override def didChange(params: DidChangeTextDocumentParams): Unit = ()
+  override def didChange(params: DidChangeTextDocumentParams): Unit =
+    logger.trace(s"Did change:\n$params")
+
+    def updateDoc(doc: Versioned[Document]): Versioned[Document] =
+      logger.debug(
+        s"${params.getTextDocument.getUri}. New changes with version ${params.getTextDocument.getVersion}. Current document version is ${doc.version}"
+      )
+      val updatedDoc =
+        params.getContentChanges.asScala.foldLeft(doc.value)(_ applyChange _)
+      Versioned(params.getTextDocument.getVersion)(updatedDoc)
+
+    val verDoc = documents.computeIfPresent(
+      Uri(params.getTextDocument.getUri),
+      (_, verDoc) => updateDoc(verDoc)
+    )
+    publishDiagnostics(verDoc.value)
 
   /** The document close notification is sent from the client to the server when the document got
     * closed in the client. The document's truth now exists where the document's uri points to (e.g.
@@ -72,6 +93,7 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
     * Registration Options: TextDocumentRegistrationOptions
     */
   override def didClose(params: DidCloseTextDocumentParams): Unit =
+    logger.trace(s"Did close\n$params")
     documents.remove(params.getTextDocument.getUri)
 
   /** The document save notification is sent from the client to the server when the document for
@@ -79,25 +101,12 @@ class SpellTextDocumentService(client: () => LanguageClient) extends TextDocumen
     *
     * Registration Options: TextDocumentSaveRegistrationOptions
     */
-  override def didSave(params: DidSaveTextDocumentParams): Unit = 
-    checkDocument(params.getTextDocument().getUri)
+  override def didSave(params: DidSaveTextDocumentParams): Unit =
+    logger.trace(s"Did save\n$params")
 
-  private def checkDocument(uri: Uri): Unit =
-    val langTool  = JLanguageTool(langs.en)
-    val suggestions: Suggestions = Files
-      .lines(Paths.get(URI(uri)))
-      .zipWithIndex
-      .flatMap { case (line, lineNumber) =>
-        langTool
-          .check(line)
-          .stream
-          .map(LineRuleMatch(_, lineNumber))
-          .map(rule => rule.getRange -> rule)
-      }
-      .toMap
-
-    documents.put(uri, suggestions)
-
+  private def publishDiagnostics(document: Document): Unit =
+    val diagnostics = document.diagnostics.toJList
+    logger.debug(s"${diagnostics.size} diagnostics exist for ${document.uri}")
     client().publishDiagnostics(
-      PublishDiagnosticsParams(uri, suggestions.values.stream.map(_.asDiagnostic).toList)
+      PublishDiagnosticsParams(document.uri.asString, diagnostics)
     )

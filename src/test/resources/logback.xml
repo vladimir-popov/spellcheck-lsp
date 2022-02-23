@@ -17,8 +17,7 @@
     </encoder>
   </appender>
 
-  <logger name="ru.dokwork" level="DEBUG" />
-  <logger name="ru.dokwork.spellchecklsp.SpellTextDocumentService" level="TRACE" />
+  <logger name="ru.dokwork" level="WARN" />
 
   <root level="error">
     <appender-ref ref="STDERR"/>
