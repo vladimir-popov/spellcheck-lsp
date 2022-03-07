@@ -7,99 +7,131 @@ import org.scalatest.matchers.should.Matchers
 
 class TextSpec extends AnyFreeSpec with Matchers:
 
-  "Read" - {
-    "should return line by its zero-based number" in {
+  val EOL = System.lineSeparator
+
+  "Reading" - {
+    "text with empty string should be empty" in {
+      "".toText.isEmpty shouldBe true
+    }
+
+    "empty text should contain one line" in {
+      "".toText.linesCount shouldBe 1
+    }
+
+    "EOL should terminate lines" in {
+      // see https://en.wikipedia.org/wiki/Newline#Interpretation
+      EOL.toText.linesCount shouldBe 1
+    }
+
+    "Text with EOL in the end should be terminated" in {
+      "".toText.isTerminated shouldBe false
+      EOL.toText.isTerminated shouldBe true
+    }
+
+    "line can be gote by its zero-based number" in {
       // given:
       val text = """This is a text
-                  |with two lines""".stripMargin.asText
+                  |with two lines""".stripMargin.toText
 
       // then:
-      text.line(0) shouldBe "This is a text\n"
-      text.line(1) shouldBe "with two lines"
+      text.line(0) shouldBe Some("This is a text" + EOL)
+      text.line(1) shouldBe Some("with two lines")
     }
 
-    "should return empty line if line is absent" in {
-      "Single line text".asText.line(1) shouldBe empty
+    "None should be returned when line is absent" in {
+      "Single line text".toText.line(1) shouldBe None
     }
 
-    "should return substring from the specified range" in {
+    "Substring from the specified range (exclusive the last symbol) should be returned" in {
       // given:
       val text  = s"""This is a text
                   |with two lines""".stripMargin
       val range = Range(Position(0, text.indexOf("text")), Position(1, 4))
 
       // when:
-      val result = text.asText.substring(range)
+      val result = text.toText.substring(range)
 
       // then:
       result shouldBe """text
                         |with""".stripMargin
     }
 
-    "should return empty if range begins out of text" in {
+    "Empty string should be returned for a range out of text" in {
       // given:
-      val text  = "test"
+      val text   = "test"
       val range1 = Range(Position(0, text.length), Position(0, text.length))
       val range2 = Range(Position(1, 0), Position(1, 0))
       // then:
-      text.asText.substring(range1) shouldBe empty
-      text.asText.substring(range2) shouldBe empty
+      text.toText.substring(range1) shouldBe empty
+      text.toText.substring(range2) shouldBe empty
     }
   }
 
   "Apply change" - {
     "should append symbol" in {
       // given:
-      val range                  = Range(Position(0, 4), Position(0, 4))
+      val range                   = Range(Position(0, 4), Position(0, 4))
       // when:
-      val (result, changedLines) = "text".asText.change(range, "!")
+      val (result, affectedLines) = "text".toText.change(range, "!")
       // then:
       result.plainText shouldBe "text!"
-      changedLines shouldBe (0 to 0)
+      affectedLines shouldBe Updated(0 to 0)
     }
 
     "should replace symbol" in {
       // given:
-      val text = "test"
-      val range = Range(Position(0, 2), Position(0, 3))
+      val text                    = "test"
+      val range                   = Range(Position(0, 2), Position(0, 3))
       // when:
-      val (result, _) = text.asText.change(range, "X")
+      val (result, affectedLines) = text.toText.change(range, "X")
       // then:
       result.plainText shouldBe "teXt"
+      affectedLines shouldBe Updated(0 to 0)
+    }
+
+    "should delete symbol" in {
+      // given:
+      val text                    = "test"
+      val range                   = Range(Position(0, 2), Position(0, 3))
+      // when:
+      val (result, affectedLines) = text.toText.change(range, "")
+      // then:
+      result.plainText shouldBe "tet"
+      affectedLines shouldBe Updated(0 to 0)
     }
 
     "should append new line" in {
       // given:
-      val text = "test"
-      val newLine = "\nnew line"
-      val range                  = Range(Position(0, text.length), Position(0, text.length))
+      val text                    = "test"
+      val newLine                 = "new line"
+      val range                   = Range(Position(1, 0), Position(1, 0))
       // when:
-      val (result, changedLines) = text.asText.change(range, newLine)
+      val (result, affectedLines) = text.toText.change(range, newLine + EOL)
       // then:
-      result.plainText shouldBe text + newLine
-      changedLines shouldBe (1 to 1)
+      result.plainText shouldBe text + EOL + newLine + EOL
+      affectedLines shouldBe Inserted(1 to 1)
     }
 
     "should prepend new line" in {
       // given:
-      val text = "test"
-      val newLine = "new line\n"
-      val range                  = Range(Position(0, 0), Position(0, 0))
+      val text                    = "test"
+      val newLine                 = "new line"
+      val range                   = Range(Position(0, 0), Position(0, 0))
       // when:
-      val (result, changedLines) = text.asText.change(range, newLine)
+      val (result, affectedLines) = text.toText.change(range, newLine + EOL)
       // then:
-      result.plainText shouldBe newLine + text
-      changedLines shouldBe (0 to 0)
+      result.plainText shouldBe newLine + EOL + text
+      affectedLines shouldBe Inserted(0 to 0)
     }
 
     "should delete line" in {
       // given:
-      val text = "multi line\ntest"
-      val range                  = Range(Position(0, 0), Position(1, 0))
+      val text                    = "multi line" + EOL + "test"
+      val range                   = Range(Position(0, 0), Position(1, 0))
       // when:
-      val (result, changedLines) = text.asText.change(range, "")
+      val (result, affectedLines) = text.toText.change(range, "")
       // then:
       result.plainText shouldBe "test"
-      changedLines shouldBe (0 to 0)
+      affectedLines shouldBe Removed(0 to 0)
     }
   }

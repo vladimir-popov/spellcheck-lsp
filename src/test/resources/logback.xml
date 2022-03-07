@@ -17,7 +17,7 @@
     </encoder>
   </appender>
 
-  <logger name="ru.dokwork" level="WARN" />
+  <logger name="ru.dokwork" level="trace" />
 
   <root level="error">
     <appender-ref ref="STDERR"/>
