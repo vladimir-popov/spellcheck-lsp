@@ -7,6 +7,12 @@ import scala.Range.{ Exclusive => ExclusiveRange, Inclusive => InclusiveRange }
 import Change.*
 import com.typesafe.scalalogging.StrictLogging
 
+/**
+ * Wrapper around a string provided operations over lines of text.
+ * Text is sliced to lines with [[System.lineSeparator system line separator]].
+ *
+ * @param lines zero-based dictionary of the first zero-based characters of lines.
+ */
 case class Text(plainText: String)(lines: Map[Int, Int]) extends StrictLogging:
 
   @inline
@@ -108,7 +114,8 @@ object Change:
       UnsupportedChange(range, text.plainText)
 
 /** Describes lines affected by changing text. */
-sealed trait AffectedLines
+sealed trait AffectedLines:
+  def lines: InclusiveRange 
 
 /** Range of lines in the new text which were inserted. */
 case class Inserted(lines: InclusiveRange) extends AffectedLines

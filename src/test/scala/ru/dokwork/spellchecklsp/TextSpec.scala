@@ -18,16 +18,18 @@ class TextSpec extends AnyFreeSpec with Matchers:
       "".toText.linesCount shouldBe 1
     }
 
-    "EOL should terminate lines" in {
-      // see https://en.wikipedia.org/wiki/Newline#Interpretation
-      EOL.toText.linesCount shouldBe 1
-    }
-
     "Text with EOL in the end should be terminated" in {
       "".toText.isTerminated shouldBe false
       EOL.toText.isTerminated shouldBe true
     }
 
+    "EOL should terminate lines" in {
+      // see https://en.wikipedia.org/wiki/Newline#Interpretation
+      EOL.toText.linesCount shouldBe 1
+    }
+  }
+
+  "Getting line" - {
     "line can be gote by its zero-based number" in {
       // given:
       val text = """This is a text
@@ -41,8 +43,10 @@ class TextSpec extends AnyFreeSpec with Matchers:
     "None should be returned when line is absent" in {
       "Single line text".toText.line(1) shouldBe None
     }
+  }
 
-    "Substring from the specified range (exclusive the last symbol) should be returned" in {
+  "Substring" - {
+    "should return substring from the specified range (exclusive the last symbol)" in {
       // given:
       val text  = s"""This is a text
                   |with two lines""".stripMargin
@@ -56,7 +60,7 @@ class TextSpec extends AnyFreeSpec with Matchers:
                         |with""".stripMargin
     }
 
-    "Empty string should be returned for a range out of text" in {
+    "should return empty string for a range out of text" in {
       // given:
       val text   = "test"
       val range1 = Range(Position(0, text.length), Position(0, text.length))

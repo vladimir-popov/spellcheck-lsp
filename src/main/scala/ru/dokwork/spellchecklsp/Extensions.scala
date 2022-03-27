@@ -15,6 +15,7 @@ import java.util.Arrays
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.immutable.ArraySeq
 import scala.reflect.ClassTag
+import scala.collection.immutable.Range.Inclusive
 
 /** Extends the [[scala.collection.Iterable]]
   */
@@ -77,6 +78,8 @@ extension (range: Range)
 
   def intersectsWith(other: Range): Boolean =
     range.contains(other.getStart) || range.contains(other.getEnd)
+
+  def lines: Inclusive = range.getStart.getLine to range.getEnd.getLine
 
 /** Extends the [[org.eclipse.lsp4j.TextEdit]]
   */
