@@ -20,6 +20,7 @@ import scala.collection.immutable.Range.Inclusive
 /** Extends the [[scala.collection.Iterable]]
   */
 extension [T <: Object](itr: scala.collection.Iterable[T])
+  // todo rename to jstream
   def stream: JStream[T] = Streams.stream(itr.asJava)
 
 /** Extends the [[scala.Option]]

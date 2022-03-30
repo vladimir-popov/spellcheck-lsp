@@ -17,11 +17,11 @@ class TxtDocumentSpec extends AnyFreeSpec with Matchers with Inspectors with Tes
     "should find two mistakes" in {
       // given:
       val textWith2Mistakes = Text.doc.text
-      val p1                = textWith2Mistakes.indexOf(Text.Mistakes(0))
-      val p2                = textWith2Mistakes.indexOf(Text.Mistakes(1))
+      val p1                = textWith2Mistakes.toString.indexOf(Text.Mistakes(0))
+      val p2                = textWith2Mistakes.toString.indexOf(Text.Mistakes(1))
 
       // when:
-      val suggestions = TxtDocument.check(ArraySeq(textWith2Mistakes), AmericanEnglish())
+      val suggestions = TxtDocument.check(textWith2Mistakes, AmericanEnglish())
 
       // then:
       suggestions(0).map(_.range) should contain allOf (
