@@ -38,5 +38,5 @@ trait Document:
 object Document:
 
   def apply(langId: String, textItem: TextDocumentItem): Document =
-    TxtDocument.create(textItem.getText, Uri(textItem.getUri), AmericanEnglish())
+    TxtDocument.apply(textItem.getText, Uri(textItem.getUri), AmericanEnglish())
 

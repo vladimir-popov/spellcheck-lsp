@@ -11,22 +11,24 @@ import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.Inspectors
 
-class TxtDocumentSpec extends AnyFreeSpec with Matchers with Inspectors with TestCases:
+class TxtDocumentSpec extends AnyFreeSpec with Matchers with Inspectors:
 
   "Check spelling" - {
     "should find two mistakes" in {
       // given:
-      val textWith2Mistakes = Text.doc.text
-      val p1                = textWith2Mistakes.toString.indexOf(Text.Mistakes(0))
-      val p2                = textWith2Mistakes.toString.indexOf(Text.Mistakes(1))
+      val m1                = "mistke"
+      val m2                = "mstake"
+      val textWith2Mistakes = s"Text with two mistakes: $m1, $m2".toText
+      val p1                = textWith2Mistakes.toString.indexOf(m1)
+      val p2                = textWith2Mistakes.toString.indexOf(m2)
 
       // when:
       val suggestions = TxtDocument.check(textWith2Mistakes, AmericanEnglish())
 
       // then:
       suggestions(0).map(_.range) should contain allOf (
-        Range(Position(0, p1), Position(0, p1 + Text.Mistakes(0).length)),
-        Range(Position(0, p2), Position(0, p2 + Text.Mistakes(1).length))
+        Range(Position(0, p1), Position(0, p1 + m1.length)),
+        Range(Position(0, p2), Position(0, p2 + m2.length))
       )
     }
   }
@@ -34,130 +36,113 @@ class TxtDocumentSpec extends AnyFreeSpec with Matchers with Inspectors with Tes
   "Diagnostics" - {
 
     "diagnostics should be empty for a correct text" in {
-      val txt = TxtDocument.create("Hello world")
-      txt.diagnostics.toIndexedSeq shouldBe empty
+      val text = TxtDocument("Hello world")
+      text.diagnostics.toIndexedSeq shouldBe empty
     }
 
     "should be created diagnostic for both mistakes" in {
+      // given:
+      val m1                = "mistke"
+      val m2                = "mstake"
+      val textWith2Mistakes = s"Text with two mistakes: $m1, $m2"
       // when:
-      val diagnostics = Text.doc.diagnostics.toIndexedSeq
+      val diagnostics       = TxtDocument(textWith2Mistakes).diagnostics.toIndexedSeq
       // then:
       diagnostics should have size 2
     }
 
     "diagnostics should have correct line number" in {
+      // given:
+      val m    = "mistke"
+      val text = s"Text with mistake:\n$m"
+
       // when:
-      val diagnostics = Text.doc.diagnostics.toIndexedSeq
+      val diagnostics = TxtDocument(text).diagnostics.headOption
 
       // then:
       // only last line has mistakes
-      diagnostics.map(_.getRange.getStart.getLine) should contain only (1)
-      diagnostics.map(_.getRange.getEnd.getLine) should contain only (1)
+      diagnostics.map(_.getRange.getStart.getLine) should contain(1)
+      diagnostics.map(_.getRange.getEnd.getLine) should contain(1)
     }
 
     "diagnostic should have right range" in {
+      // given:
+      val m          = "mistke"
+      val text       = s"Text with mistake: $m"
       // when:
-      val diagnostic = Text.doc.diagnostics.toIndexedSeq.head
+      val diagnostic = TxtDocument(text).diagnostics.headOption
       // then:
-      val character = Text.line1.indexOf(Text.Mistakes(0))
-      diagnostic.getRange shouldBe Range(
-        Position(1, character),
-        Position(1, character + Text.Mistakes(0).length)
-      )
+      val character  = text.indexOf(m)
+      diagnostic.map(_.getRange) should contain(Range(
+        Position(0, character),
+        Position(0, character + m.length)
+      ))
     }
 
-    "diagnostics should be removed after applying cnahges" in {
+    "diagnostics should be removed after applying cnahge" in {
+      // given:
+      val m      = "mistke"
+      val text   = s"Text with mistake: $m"
+      val change = changeEvent(
+        Range(
+          Position(0, text.indexOf(m)),
+          Position(0, text.indexOf(m) + m.length)
+        ),
+        "mistake"
+      )
       // when:
-      val diagnostics = Text.doc
-        .applyChange(Text.Changes.fixMistake1)
-        .applyChange(Text.Changes.fixMistake2)
+      val diagnostics = TxtDocument(text)
+        .applyChange(change)
         .diagnostics
         .toIndexedSeq
-
       // then:
       diagnostics shouldBe empty
     }
 
-    "should be added one more diagnostic for the new added line" in {
+    "should be added a diagnostic for the new added line" in {
       // give:
+      val text                     = "Text without mistakes."
       val appendNewLineWithMistake = changeEvent(
-        Range(Position(2, 0), Position(2, 0)),
-        "new line with mstk" + System.lineSeparator
+        Range(Position(1, 0), Position(1, 0)),
+        "New line with mstk." + System.lineSeparator
       )
       // when:
-      val diagnostics =
-        Text.doc.applyChange(appendNewLineWithMistake).diagnostics.toIndexedSeq
+      val diagnostics              =
+        TxtDocument(text).applyChange(appendNewLineWithMistake).diagnostics.toIndexedSeq
       // then:
       diagnostics.filter(_.getRange.getStart.getLine == 0) should have size 0
-      diagnostics.filter(_.getRange.getStart.getLine == 1) should have size 2
-      diagnostics.filter(_.getRange.getStart.getLine == 2) should have size 1
+      diagnostics.filter(_.getRange.getStart.getLine == 1) should have size 1
     }
   }
 
   "Text edits" - {
-    // given:
-    val char = Text.line1.indexOf(Text.Mistakes(0))
-    val p1   = Position(1, char)
-    val p2   = Position(1, char + Text.Mistakes(0).length)
 
     "should return limited count of `TextEdit`s" in {
       // given:
-      val N = 5
+      val N     = 5
+      val m = "mstk"
+      val text = s"Text with $m."
+      val p = Position(0, text.indexOf(m))
       // when:
-      val edits = Text.doc.getTextEdits(p1, N)
+      val edits = TxtDocument(text).getTextEdits(p, N)
       // then:
       edits.toJList.size should be <= N
     }
 
     "should return edits to fix only the first mistake" in {
+      // given:
+      val m1                = "mistke"
+      val m2                = "mstake"
+      val text = s"Text with two mistakes: $m1, $m2"
+      val p1 = Position(0, text.indexOf(m1))
+      val p2 = Position(0, text.indexOf(m1) + m1.length)
       // when:
-      val edits = Text.doc.getTextEdits(p1).toIndexedSeq
+      val edits = TxtDocument(text).getTextEdits(p1).toIndexedSeq
       // then:
       forAll(edits)(_.getRange shouldBe Range(p1, p2))
     }
   }
 
-trait TestCases:
 
-  def changeEvent(range: Range, text: String) =
+  private def changeEvent(range: Range, text: String) =
     TextDocumentContentChangeEvent(range, 0, text)
-
-  object Text:
-    object Mistakes:
-      val wto       = "wto"
-      val mmistakes = "mmistakes"
-      def apply(i: Int) = if i == 0 then wto else mmistakes
-
-    val line0              = "This is a text"
-    val line1              = s"with ${Mistakes.wto} ${Mistakes.mmistakes}"
-
-    /** {{{
-      *   This is a text
-      *   with wto mmistakes
-      * }}}
-      */
-    val doc: TxtDocument = TxtDocument.create(line0 + "\n" + line1)
-
-    object Changes:
-      val fixMistake1           = changeEvent(
-        Range(
-          Position(1, line1.indexOf(Mistakes.wto)),
-          Position(1, line1.indexOf(Mistakes.wto) + Mistakes.wto.length)
-        ),
-        "two"
-      )
-      val fixMistake2           = changeEvent(
-        Range(
-          Position(1, line1.indexOf(Mistakes.mmistakes)),
-          Position(1, line1.indexOf(Mistakes.mmistakes) + Mistakes.mmistakes.length)
-        ),
-        "mistakes"
-      )
-      val appendDotToEnd        = changeEvent(
-        Range(Position(1, line1.length), Position(1, line1.length)),
-        "."
-      )
-      val deleteLastLine        = changeEvent(
-        Range(Position(1, 0), Position(2, 0)),
-        ""
-      )

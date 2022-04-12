@@ -59,6 +59,10 @@ extension [T](s: JStream[T])
   def toIndexedSeq: IndexedSeq[T] =
     s.toJList.asScala.toIndexedSeq
 
+  def headOption: Option[T] = 
+    val itr = s.iterator()
+    Option.when(itr.hasNext)(itr.next())
+
 /** Extends the [[org.eclipse.lsp4j.Position]]
   */
 extension (pos: Position)

@@ -20,7 +20,7 @@ extension (str: String)
 
     Text(str)(loop(0, 0, Map.empty))
 
-/** Wrapper around a string provided operations over lines of text. Text is sliced to lines with
+/** Wrapper around a string providing operations over lines of text. Text is sliced to lines with
   * [[System.lineSeparator system line separator]].
   *
   * @param index
@@ -121,17 +121,17 @@ case class Text private[spellchecklsp] (plainText: String)(index: Map[Int, Int])
     case class UnsupportedChange(range: Range, str: String)                 extends Exception with Change:
       override def getMessage: String = s"Unsupported change in range $range:\n[$str]"
 
-    def apply(range: Range, text: Text): Change =
+    def apply(range: Range, newText: Text): Change =
       val rangeLines = range.getEnd.getLine - range.getStart.getLine
 
-      if text.isEmpty && rangeLines > 0 then
+      if newText.isEmpty && rangeLines > 0 then
         Remove(range.getStart.getLine, range.getEnd.getLine)
-      else if range.getStart == range.getEnd && text.isTerminated then
-        Insert(range.getStart.getLine, text)
+      else if range.getStart == range.getEnd && newText.isTerminated then
+        Insert(range.getStart.getLine, newText)
       else if range.getStart.getLine == range.getEnd.getLine then
-        Update(range.getStart.getLine, range.getStart.getCharacter, range.getEnd.getCharacter, text)
+        Update(range.getStart.getLine, range.getStart.getCharacter, range.getEnd.getCharacter, newText)
       else
-        UnsupportedChange(range, text.plainText)
+        UnsupportedChange(range, newText.plainText)
 
 /** Describes lines affected by changing text. */
 sealed trait AffectedLines:
