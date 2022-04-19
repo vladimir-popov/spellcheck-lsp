@@ -4,10 +4,11 @@ import org.eclipse.lsp4j.Range
 import org.eclipse.lsp4j.Position
 import org.scalatest.freespec.AnyFreeSpec
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.Inspectors
 
-class TextSpec extends AnyFreeSpec with Matchers:
+class TextSpec extends AnyFreeSpec with Matchers with Inspectors:
 
-  val EOL = System.lineSeparator
+  val EOLs = Seq("\n", "\r", "\r\n")
 
   "Reading" - {
     "text with empty string should be empty" in {
@@ -23,24 +24,35 @@ class TextSpec extends AnyFreeSpec with Matchers:
 
     "Text with EOL in the end should be terminated" in {
       "".toText.isTerminated shouldBe false
-      EOL.toText.isTerminated shouldBe true
+      forAll(EOLs) { EOL =>
+        EOL.toText.isTerminated shouldBe true
+      }
     }
 
     "EOL should terminate lines" in {
       // see https://en.wikipedia.org/wiki/Newline#Interpretation
-      EOL.toText.linesCount shouldBe 1
+      forAll(EOLs) { EOL =>
+        EOL.toText.linesCount shouldBe 1
+      }
+    }
+
+    "EOL must be determined for every terminated text" in {
+      forAll(EOLs) { EOL =>
+        EOL.toText.eol shouldBe EOL
+      }
     }
   }
 
   "Getting line" - {
     "line can be gote by its zero-based number" in {
-      // given:
-      val text = """This is a text
-                  |with two lines""".stripMargin.toText
+      forAll(EOLs) { EOL =>
+        // given:
+        val text = s"This is a text${EOL}with two lines".toText
 
-      // then:
-      text.line(0) shouldBe Some("This is a text" + EOL)
-      text.line(1) shouldBe Some("with two lines")
+        // then:
+        text.line(0) shouldBe Some("This is a text")
+        text.line(1) shouldBe Some("with two lines")
+      }
     }
 
     "None should be returned when line is absent" in {
@@ -50,17 +62,17 @@ class TextSpec extends AnyFreeSpec with Matchers:
 
   "Substring" - {
     "should return substring from the specified range (exclusive the last symbol)" in {
-      // given:
-      val text  = s"""This is a text
-                  |with two lines""".stripMargin
-      val range = Range(Position(0, text.indexOf("text")), Position(1, 4))
+      forAll(EOLs) { EOL =>
+        // given:
+        val text  = s"This is a text${EOL}with two lines"
+        val range = Range(Position(0, text.indexOf("text")), Position(1, 4))
 
-      // when:
-      val result = text.toText.substring(range)
+        // when:
+        val result = text.toText.substring(range)
 
-      // then:
-      result shouldBe """text
-                        |with""".stripMargin
+        // then:
+        result shouldBe s"text${EOL}with"
+      }
     }
 
     "should return empty string for a range where the start is out of text" in {
@@ -116,38 +128,44 @@ class TextSpec extends AnyFreeSpec with Matchers:
       affectedLines shouldBe Updated(0 to 0)
     }
 
-    "should append the new line" in {
+    "should append the new line to the text" in {
       // given:
-      val text                    = "test"
-      val newLine                 = "new line"
-      val range                   = Range(Position(1, 0), Position(1, 0))
-      // when:
-      val (result, affectedLines) = text.toText.change(range, newLine + EOL)
-      // then:
-      result.plainText shouldBe text + EOL + newLine + EOL
-      affectedLines shouldBe Inserted(1 to 1)
+      val text    = "test"
+      val newLine = "new line"
+      val range   = Range(Position(1, 0), Position(1, 0))
+      forAll(EOLs) { EOL =>
+        // when:
+        val (result, affectedLines) = text.toText.change(range, newLine + EOL)
+        // then:
+        result.plainText shouldBe text + EOL + newLine + EOL
+        affectedLines shouldBe Inserted(1 to 1)
+      }
     }
 
     "should prepend the new line" in {
       // given:
-      val text                    = "test"
-      val newLine                 = "new line"
-      val range                   = Range(Position(0, 0), Position(0, 0))
-      // when:
-      val (result, affectedLines) = text.toText.change(range, newLine + EOL)
-      // then:
-      result.plainText shouldBe newLine + EOL + text
-      affectedLines shouldBe Inserted(0 to 0)
+      val text    = "test"
+      val newLine = "new line"
+      val range   = Range(Position(0, 0), Position(0, 0))
+      forAll(EOLs) { EOL =>
+        // when:
+        val (result, affectedLines) = text.toText.change(range, newLine + EOL)
+        // then:
+        result.plainText shouldBe newLine + EOL + text
+        affectedLines shouldBe Inserted(0 to 0)
+      }
     }
 
     "should delete the line" in {
-      // given:
-      val text                    = "multi line" + EOL + "test"
-      val range                   = Range(Position(0, 0), Position(1, 0))
-      // when:
-      val (result, affectedLines) = text.toText.change(range, "")
-      // then:
-      result.plainText shouldBe "test"
-      affectedLines shouldBe Removed(0 to 0)
+      forAll(EOLs) { EOL =>
+        // given:
+        val text                    = "multi line" + EOL + "test"
+        val range                   = Range(Position(0, 0), Position(1, 0))
+        // when:
+        val (result, affectedLines) = text.toText.change(range, "")
+        // then:
+        result.plainText shouldBe "test"
+        affectedLines shouldBe Removed(0 to 0)
+      }
     }
   }
